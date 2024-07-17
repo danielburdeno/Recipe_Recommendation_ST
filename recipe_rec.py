@@ -8,12 +8,12 @@ from sklearn.metrics.pairwise import cosine_similarity
 def load_data(file_path):
     return pd.read_parquet(file_path)
 
-recipes_meta = load_data('data/recipes.parquet')
-recipes_step = load_data('data/recipes_steps.parquet')
+recipes_ingtag = load_data('data/recipes_ingtag.parquet')
+recipes_steps = load_data('data/recipes_steps.parquet')
 recipes_feat = load_data('data/recipes_feat.parquet')
 
 st.image('images/header.jpg', use_column_width=True)
-st.title('Content Recipe Recommendations')
+st.title('Content Recipe Search & Recommendations')
 
 tag_options = ['60-minutes-or-less', '30-minutes-or-less', '15-minutes-or-less', 'meat', 'poultry', 'vegetables', 
                'fruit', 'pasta-rice-and-grains', 'dietary', 'healthy', 'low-carb', 'low-sodium', 'low-saturated-fat', 'low-calorie', 
@@ -24,33 +24,19 @@ tags_selected = st.multiselect('Please select any tags for a meal you are intere
 def all_tags_present(item_tags, selected):
     return all(string in item_tags for string in selected)
 
-recipes_rec = recipes_meta.copy()
+recipes_rec = recipes_ingtag.copy()
 if tags_selected:
     recipes_rec['tag_match'] = recipes_rec['tags'].apply(all_tags_present, selected=tags_selected)
         
-ing_selected = st.text_input('Please enter any ingredients you have on hand separated by commas, use plurals.')
+ing_selected = st.text_input('Please enter any ingredients you have on hand separated by commas.', help='Use lowercase and plural form when appropriate')
 ing_selected = ing_selected.split(',')
-
-def search_ing(row_ingredients, ing_selected):
-    row_set = set(row_ingredients)
-    search_set = set()
-    for ing in ing_selected:
-        for row_ing in row_ingredients:
-            if row_ing in ing or ing in row_ing:
-                search_set.add(row_ing)
-    found = row_set.intersection(search_set)
-    return list(found)
 
 def check_ingredients_df(ingredients_col):
     ingredients = ing_selected
-    all_ings = ingredients_col
-    
-    # If all_ings is empty, return False
-    if not all_ings:
-        return False
+    ings_matched = ingredients_col
     
     # Join all ingredients into a single lowercase string
-    ingredients_str = ' '.join(str(ing).lower() for ing in all_ings)
+    ingredients_str = ' '.join(str(ing).lower() for ing in ings_matched)
     
     # Check each item in all_ings
     for item in ingredients:
@@ -63,22 +49,23 @@ def check_ingredients_df(ingredients_col):
 
 search = st.button('Search for matching recipes')
 if search:
-    if ing_selected:
-        recipes_rec['ing_matched'] = recipes_rec['ingredients'].apply(search_ing, ing_selected=ing_selected)
-        recipes_rec['match'] = recipes_rec['ing_matched'].apply(check_ingredients_df)
-        recipes_rec = recipes_rec[recipes_rec['match'] == True]
+    recipes_rec = recipes_ingtag.copy()
     if tags_selected:
+        recipes_rec['tag_match'] = recipes_rec['tags'].apply(all_tags_present, selected=tags_selected)
         recipes_rec = recipes_rec[recipes_rec['tag_match'] == True]
+    if ing_selected:
+        recipes_rec['ing_match'] = recipes_rec['ingredients'].apply(check_ingredients_df)
+        recipes_rec = recipes_rec[recipes_rec['ing_match'] == True]
     recipes_id = recipes_rec['id'].values
-    recipes_step_rec = recipes_step[recipes_step['id'].isin(recipes_id)][['id', 'name', 'description']]
-    st.write(recipes_step_rec)
-id_num = st.number_input('Does one of these recipes catch your eye? Enter the id number here, no commas.', value=0)
+    recipes_steps_rec = recipes_steps[recipes_steps['id'].isin(recipes_id)][['id', 'name', 'description']]
+    st.write(recipes_steps_rec)
+id_num = st.number_input('Does one of these recipes catch your eye? Enter the id number here.', value=0)
 get_recipe = st.button('Get Recipe')
 if get_recipe:
-    recipe = recipes_step[recipes_step['id'] == id_num]
-    rec_name = recipes_step[recipes_step['id'] == id_num]['name'].values[0]
-    rec_steps = recipes_step[recipes_step['id'] == id_num]['steps'].values[0]
-    rec_ingredients = recipes_step[recipes_step['id'] == id_num]['ingredients'].values[0]
+    recipe = recipes_steps[recipes_steps['id'] == id_num]
+    rec_name = recipe['name'].values[0]
+    rec_steps = recipe['steps'].values[0]
+    rec_ingredients = recipe['ingredients'].values[0]
     link_name = rec_name.replace(' ', '-')
     link_url = f'https://www.food.com/recipe/{link_name}-{id_num}'
     st.write(f"Link to Recipe: {link_url}")
@@ -104,5 +91,5 @@ if sim:
     sim_scores = sim_scores[1:6]
     rec_indices = [i[0] for i in sim_scores]
     
-    recs = recipes_step[recipes_step['id'].isin(rec_indices)][['id', 'name', 'description']]
+    recs = recipes_steps[recipes_steps['id'].isin(rec_indices)][['id', 'name', 'description']]
     st.write(recs)  
